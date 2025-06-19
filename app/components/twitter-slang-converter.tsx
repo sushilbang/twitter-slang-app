@@ -121,9 +121,9 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background px-4 text-text-main">
-      <div className="w-full max-w-xl p-6 bg-card rounded-xl border-2 border-border-main text-center glow-border">
+      <div className="w-full max-w-xl p-4 md:p-6 bg-card rounded-xl border-2 border-border-main text-center glow-border">
         <div className="p-2 rounded border-2 border-border-main mb-6 bg-background">
-          <h1 className="font-pixel text-lg text-primary text-shadow-primary">
+          <h1 className="font-pixel text-base md:text-lg text-primary text-shadow-primary">
             {"> Twitter Slang Converter_"}
           </h1>
         </div>
@@ -150,7 +150,7 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
         <button
           onClick={handleConvert}
           disabled={isLoading || !input.trim()}
-          className="font-pixel button-3d bg-primary text-white font-bold py-3 px-6 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="font-pixel button-3d bg-primary text-white font-bold py-3 px-6 text-sm md:text-base rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? "Converting..." : "Convert! >>"}
         </button>
@@ -172,18 +172,18 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
           className="w-full min-h-[120px] p-4 bg-background border-2 border-border-main rounded resize-y text-text-main"
         />
 
-        <div className="flex justify-center gap-4 mt-4">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-4">
           <button
             onClick={handleCopy}
             disabled={isOutputEmpty}
-            className="font-pixel button-3d bg-secondary text-white py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="font-pixel button-3d bg-secondary text-white py-2 px-4 rounded text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             📋 {copySuccess ? "Copied!" : "Copy"}
           </button>
           <button
             onClick={handleTweet}
             disabled={isOutputEmpty}
-            className="font-pixel button-3d bg-primary text-white py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="font-pixel button-3d bg-primary text-white py-2 px-4 rounded text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Post to Twitter
           </button>
