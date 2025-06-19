@@ -125,24 +125,19 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ convertedText: slangVersion });
-  } catch (error: any) {
-    console.error("An unexpected error occurred in /api/convert:", error);
-    const errorMessage = error.message || "";
-    if (
-      errorMessage.toLowerCase().includes("quota") ||
-      errorMessage.toLowerCase().includes("resource has been exhausted")
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "We're experiencing high demand right now and have temporarily reached our capacity. Please try again later.",
-        },
-        { status: 503 }
-      );
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("An unexpected error occurred in /api/convert:", error.message);
+      const errorMessage = error.message || '';
+      if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource has been exhausted')) {
+        return NextResponse.json(
+          { error: "We're experiencing high demand right now and have temporarily reached our capacity. Please try again later." },
+          { status: 503 } 
+        );
+      }
+      return NextResponse.json({ error: 'An internal server error occurred.' }, { status: 500 });
     }
-    return NextResponse.json(
-      { error: "An internal server error occurred." },
-      { status: 500 }
-    );
+    console.error("An unexpected non-error was caught:", error);
+    return NextResponse.json({ error: 'An unexpected issue occurred.' }, { status: 500 });
   }
 }

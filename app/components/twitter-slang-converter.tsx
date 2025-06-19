@@ -87,13 +87,15 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
 
       setOutput(data.convertedText);
       setRequestsLeft(prev => prev - 1);
-    } catch (err: any) {
-      console.error("Error calling API:", err);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Error calling API:", err);
+        setError(err.message);
+      } else {
+        console.error("An unexpected error was caught:", err);
+        setError("An unexpected error occurred.");
+      }
     }
-  };
 
   const handleCopy = async () => {
     if (!output.trim() || isLoading) return;
@@ -136,7 +138,7 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
         <div className="font-pixel text-xs text-center mb-4 p-2 bg-background/50 border border-border-main rounded-md">
           REQUESTS REMAINING: <span className="text-primary font-bold">{requestsLeft > 0 ? requestsLeft : 0}</span> / {usageData.requestsLimit}
         </div>
-        
+
         <textarea
           value={input}
           // Use our new handler function here
