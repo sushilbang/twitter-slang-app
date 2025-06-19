@@ -37,17 +37,15 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
     }, 50);
     return () => clearInterval(intervalId);
   }, []);
-  
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
-    // Split the text by spaces/newlines to count words. Filter out empty strings.
     const words = text.split(/\s+/).filter(Boolean);
 
     if (words.length <= WORD_LIMIT) {
       setInput(text);
       setWordCount(words.length);
     }
-    // If the limit is exceeded, we do nothing, so the input doesn't change.
   };
 
   const handleConvert = async () => {
@@ -60,21 +58,17 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
     setOutput("");
 
     try {
-      // 1. Get the user's current session, which contains the access token
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      // It's good practice to check if the user is somehow not logged in
       if (!token) {
         throw new Error("You must be logged in to perform this action.");
       }
 
-      // 2. Make the API call, but now include the token in the headers
       const response = await fetch('/api/convert', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // This 'Authorization' header is how we securely pass the user's identity
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ inputText: input }),
@@ -95,7 +89,10 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
         console.error("An unexpected error was caught:", err);
         setError("An unexpected error occurred.");
       }
+    } finally {
+      setIsLoading(false);
     }
+  };
 
   const handleCopy = async () => {
     if (!output.trim() || isLoading) return;
@@ -132,7 +129,7 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
         </div>
 
         <p className="font-pixel text-sm opacity-90 mb-6">
-          Level up your thoughts — make {"em"} tweet-worthy 🚀
+          Level up your thoughts — make {'em'} tweet-worthy 🚀
         </p>
 
         <div className="font-pixel text-xs text-center mb-4 p-2 bg-background/50 border border-border-main rounded-md">
@@ -141,13 +138,11 @@ export default function TwitterSlangConverter({ usageData }: { usageData: UsageD
 
         <textarea
           value={input}
-          // Use our new handler function here
           onChange={handleInputChange}
           placeholder={placeholder}
           disabled={isLoading}
-          className="w-full min-h-[120px] p-4 mb-2 bg-background border-2 border-border-main rounded focus-glow resize-y text-text-main disabled:opacity-50" // a little less margin-bottom
+          className="w-full min-h-[120px] p-4 mb-2 bg-background border-2 border-border-main rounded focus-glow resize-y text-text-main disabled:opacity-50"
         />
-        {/* Add the word count display below the textarea */}
         <div className="w-full text-right font-pixel text-xs text-text-main/70 mb-4">
           {wordCount}/{WORD_LIMIT} words
         </div>
