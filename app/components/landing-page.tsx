@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client'; // We'll create this file next
+import { createClient } from '@/lib/supabase/client';
 import { Play } from 'lucide-react';
 
 export default function LandingPage() {
@@ -11,12 +11,11 @@ export default function LandingPage() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    setError(""); // Clear previous errors
+    setError("");
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // This is the URL the user will be sent back to after signing in
         redirectTo: `${window.location.origin}/api/auth/callback`
       }
     });
@@ -26,7 +25,6 @@ export default function LandingPage() {
       setError("Failed to sign in. Please try again.");
       setIsLoading(false);
     }
-    // No need to set loading to false on success, as the page will redirect.
   };
 
   return (

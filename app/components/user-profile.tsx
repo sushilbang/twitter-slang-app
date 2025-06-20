@@ -4,13 +4,12 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
-import { useState } from 'react'; // Import useState
+import { useState } from 'react';
 
 export default function UserProfile({ user }: { user: User }) {
   const supabase = createClient();
   const router = useRouter();
   
-  // --- NEW: Add loading state ---
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignOut = async () => {
