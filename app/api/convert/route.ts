@@ -1,6 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
-import { type NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { redis } from '@/lib/redis';
+
+const THROTTLE_LIMIT = 6;
+const THROTTLE_WINDOW_SECONDS = 60;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,13 +13,9 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    // === STEP 1: AUTHENTICATE THE USER VIA JWT ===
-    const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '');
     if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing token." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized: Missing token.' }, { status: 401 });
     }
 
     const supabaseForUser = createClient(
@@ -23,121 +23,102 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseForUser.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseForUser.auth.getUser();
 
     if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid token.' }, { status: 401 });
+    }
+
+    const userThrottleKey = `throttle:${user.id}`;
+    const currentRequests = await redis.get(userThrottleKey);
+
+    if (currentRequests && Number(currentRequests) >= THROTTLE_LIMIT) {
       return NextResponse.json(
-        { error: "Unauthorized: Invalid token." },
-        { status: 401 }
+        { error: 'You are sending requests too fast. Please wait a moment.' },
+        { status: 429 }
       );
     }
 
-    // === STEP 2: FETCH USER PROFILE & CHECK/RESET RATE LIMIT ===
-    // We now select 'requests_reset_at' as well
+    const newCount = await redis.incr(userThrottleKey);
+    if (newCount === 1) {
+      await redis.expire(userThrottleKey, THROTTLE_WINDOW_SECONDS);
+    }
+
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("requests_made, requests_limit, requests_reset_at")
-      .eq("id", user.id)
+      .from('profiles')
+      .select('requests_made, requests_limit, requests_reset_at')
+      .eq('id', user.id)
       .single();
 
     if (profileError || !profile) {
-      console.error("Critical: Profile not found for user:", user.id);
       return NextResponse.json(
-        { error: "User profile not found. Please contact support." },
+        { error: 'User profile not found. Please contact support.' },
         { status: 500 }
       );
     }
 
     const now = new Date();
-    // Ensure requests_reset_at is treated as a Date object
     const resetDate = new Date(profile.requests_reset_at || 0);
     let requestsMade = profile.requests_made;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Get the start of today (midnight in the server's timezone)
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-
-    // Check if the last reset was before the start of today
     if (resetDate < startOfToday) {
-      console.log(`New day for user ${user.id}. Resetting request count.`);
-      // It's a new day, so we reset the count in our local variable...
       requestsMade = 0;
-      // ...and update the database for future requests.
-      const { error: resetError } = await supabaseAdmin
-        .from("profiles")
+      supabaseAdmin
+        .from('profiles')
         .update({ requests_made: 0, requests_reset_at: now.toISOString() })
-        .eq("id", user.id);
-
-      if (resetError) {
-        // Log the error but don't block the user's first request of the day
-        console.error(
-          "Failed to reset daily request count:",
-          resetError.message
-        );
-      }
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to reset daily count:', error.message);
+        });
     }
 
-    // Now we check the potentially updated 'requestsMade' count
     if (requestsMade >= profile.requests_limit) {
       return NextResponse.json(
         {
-          error: `You have reached your daily limit of ${profile.requests_limit} free requests. Come back tomorrow or upgrade for more.`,
+          error: `You have reached your daily limit of ${profile.requests_limit} requests.`,
+          remaining: 0,
         },
-        { status: 429 } // Too Many Requests
+        { status: 429 }
       );
     }
 
-    // === STEP 3: PROCESS THE CONVERSION ===
     const { inputText } = await request.json();
     if (!inputText) {
-      return NextResponse.json(
-        { error: "Input text is required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Input text is required.' }, { status: 400 });
     }
 
     const genai = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `You are a "Twitter Slang Converter" bot. Rewrite the following sentence into a short, punchy, authentic-sounding tweet using modern internet slang. Keep the original meaning. Output ONLY the converted sentence. Original: "${inputText}" Converted:`;
+    const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = `Convert this sentence into modern Twitter slang — concise, snappy, and full of Gen Z internet language. The meaning should stay the same, but the vibe should shift to something you'd casually post on the timeline. Only give the converted part. Sentence: "${inputText}" Converted:`;
 
     const result = await model.generateContent(prompt);
     const slangVersion = result.response.text().trim();
 
-    // === STEP 4: INCREMENT THE USER'S REQUEST COUNT using the ADMIN client ===
-    // We use our local variable `requestsMade` which may have been reset to 0
-    const { error: updateError } = await supabaseAdmin
-      .from("profiles")
+    supabaseAdmin
+      .from('profiles')
       .update({ requests_made: requestsMade + 1 })
-      .eq("id", user.id);
+      .eq('id', user.id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to update request count:', error.message);
+      });
 
-    if (updateError) {
-      console.error(
-        "Failed to update request count for user:",
-        user.id,
-        updateError.message
+    return NextResponse.json({
+      convertedText: slangVersion,
+      remaining: profile.requests_limit - (requestsMade + 1),
+    });
+
+  } catch (error) {
+    const err = error as Error;
+    console.error('API Route Global Error:', err.message || error);
+
+    if (err.message?.toLowerCase().includes('quota') || err.message?.includes('exhausted')) {
+      return NextResponse.json(
+        { error: 'We’re experiencing high demand right now. Please try again later.' },
+        { status: 503 }
       );
     }
 
-    return NextResponse.json({ convertedText: slangVersion });
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error("An unexpected error occurred in /api/convert:", error.message);
-      const errorMessage = error.message || '';
-      if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource has been exhausted')) {
-        return NextResponse.json(
-          { error: "We're experiencing high demand right now and have temporarily reached our capacity. Please try again later." },
-          { status: 503 } 
-        );
-      }
-      return NextResponse.json({ error: 'An internal server error occurred.' }, { status: 500 });
-    }
-    console.error("An unexpected non-error was caught:", error);
-    return NextResponse.json({ error: 'An unexpected issue occurred.' }, { status: 500 });
+    return NextResponse.json({ error: 'An unexpected internal server error occurred.' }, { status: 500 });
   }
 }
