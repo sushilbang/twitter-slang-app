@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Press_Start_2P, M_PLUS_Rounded_1c } from 'next/font/google';
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"
 
 // Load and bind fonts to CSS variables
 const pressStart2P = Press_Start_2P({
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${pressStart2P.variable} ${mPlusRounded1c.variable} antialiased`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
